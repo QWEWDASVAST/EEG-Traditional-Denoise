@@ -1,150 +1,152 @@
-clear;clc;
-%% 准备文件路径
+clear; clc;
+
+%% Prepare file paths
 data_path = 'E:\workspace\Pycharmworkspace\EEGPT-main\datasets\TSUBenchmark\Raw';
 new_save_path = 'E:\workspace\Pycharmworkspace\EEGPT-main\datasets\TSUBenchmark\processing\WT';
 
-% 确保输出目录存在
+% Ensure output directory exists
 if ~isfolder(new_save_path)
     mkdir(new_save_path);
 end
 
-%% 获取所有.mat文件列表
-% 使用dir函数获取目录下所有.mat文件 
+%% Get list of all .mat files
+% Use dir function to get all .mat files in the directory
 mat_files = dir(fullfile(data_path, '*.mat'));
-fprintf('找到%d个MAT文件需要处理\n', length(mat_files));
+fprintf('Found %d MAT files to process\n', length(mat_files));
 
 fs = 250;
 
-% 小波阈值去噪参数
-wname = 'db4';        % 小波名称，db4小波在EEG处理中常用
-level = 3;            % 小波分解水平
+% Wavelet threshold denoising parameters
+wname = 'db4';        % Wavelet name, db4 wavelet is commonly used in EEG processing
+level = 3;            % Wavelet decomposition level
 
-%% 加载电极位置模板
-load('biosemi_template.mat');          % 变量 locs / EEG_channels 已存在
+%% Load electrode position template
+load('biosemi_template.mat');          % Variables locs / EEG_channels already exist
 topoplot([], locs, 'electrodes','ptslabels','plotdisk','on');
 
 EEG_channels = 1:64;
 
-%% 循环处理每个文件
+%% Process each file in loop
 for file_idx = 1:length(mat_files)
     try
-        % 获取当前文件名
+        % Get current file name
         data_file = mat_files(file_idx).name;
         fid = fullfile(data_path, data_file);
         
-        fprintf('\n正在处理文件 %d/%d: %s\n', file_idx, length(mat_files), data_file);
+        fprintf('\nProcessing file %d/%d: %s\n', file_idx, length(mat_files), data_file);
         
-        % 加载数据
+        % Load data
         load(fid);
         
         fs = 250;
         
-        %% 参数初始化
+        %% Parameter initialization
         [nChan, nTime, nFreq, nBlock] = size(data);
-        nEpoch = nFreq * nBlock;               % 总 epoch 数
+        nEpoch = nFreq * nBlock;               % Total number of epochs
         
-        % 初始化去噪后的4维数据数组
+        % Initialize 4D array for denoised data
         data_denoised = zeros(nChan, nTime, nFreq, nBlock);
         
-        %% 按epoch逐个进行ICA去伪迹处理
-        fprintf('  开始逐个epoch处理，总共%d个epoch...\n', nEpoch);
+        %% Process each epoch individually with wavelet threshold denoising
+        fprintf('  Starting individual epoch processing, total %d epochs...\n', nEpoch);
         
-        % 循环处理每个epoch
+        % Loop through each epoch
         epoch_count = 0;
         for freq_idx = 1:nFreq
             for block_idx = 1:nBlock
                 epoch_count = epoch_count + 1;
-                fprintf('  正在处理epoch %d/%d (频率%d/%d, 区块%d/%d)...\n', ...
+                fprintf('  Processing epoch %d/%d (frequency %d/%d, block %d/%d)...\n', ...
                     epoch_count, nEpoch, freq_idx, nFreq, block_idx, nBlock);
                 
-                % 提取当前epoch的数据 (64, 1500)
+                % Extract data of current epoch (64, 1500)
                 current_epoch = data(:, :, freq_idx, block_idx);
                 
-                % 对当前epoch进行ICA去伪迹
-                 EEG_clean_epoch = WT_artifact_removal(current_epoch, EEG_channels, wname, level);
+                % Perform wavelet threshold denoising on current epoch
+                EEG_clean_epoch = WT_artifact_removal(current_epoch, EEG_channels, wname, level);
                 
-                % 验证处理后的数据维度
+                % Verify dimensions of processed data
                 [clean_nChan, clean_nTime] = size(EEG_clean_epoch);
                 if clean_nChan ~= nChan || clean_nTime ~= nTime
-                    fprintf('    警告: 处理后的epoch维度变化 (%d×%d -> %d×%d)，进行自动调整\n', ...
+                    fprintf('    Warning: Epoch dimension changed after processing (%d脳%d -> %d脳%d), performing automatic adjustment\n', ...
                         nChan, nTime, clean_nChan, clean_nTime);
-                    % 如果维度不匹配，尝试调整或使用原始数据
+                    % Adjust dimensions or use original data if mismatch occurs
                     if clean_nChan == nChan && clean_nTime <= nTime
-                        % 如果通道数相同但时间点减少，用零填充
+                        % Zero-padding if channel count matches but time points are reduced
                         temp_data = zeros(nChan, nTime);
                         temp_data(:, 1:min(nTime, clean_nTime)) = EEG_clean_epoch(:, 1:min(nTime, clean_nTime));
                         EEG_clean_epoch = temp_data;
                     else
-                        fprintf('    错误: 无法调整维度，使用原始epoch数据\n');
+                        fprintf('    Error: Unable to adjust dimensions, using original epoch data\n');
                         EEG_clean_epoch = current_epoch;
                     end
                 end
                 
-                % 将处理后的epoch数据存回4维数组
+                % Store processed epoch data back to 4D array
                 data_denoised(:, :, freq_idx, block_idx) = EEG_clean_epoch;
             end
         end
         
-        fprintf('  所有epoch处理完成！\n');
+        fprintf('  All epochs processed successfully!\n');
         
-        %% 保存处理后的数据
+        %% Save processed data
         full_file_path = fullfile(new_save_path, data_file);
-        % 加载时获取所有变量
+        % Load all variables from original file
         file_vars = load(fid);
         vars_list = fieldnames(file_vars);
         
-        % 更新需要修改的变量
-        file_vars.data = data_denoised;  % 替换为去噪后的数据
+        % Update the variable to be modified
+        file_vars.data = data_denoised;  % Replace with denoised data
         
-        % 保存所有变量（包括原始文件中可能存在的其他变量）
+        % Save all variables (including other potential variables in original file)
         save(full_file_path, '-struct', 'file_vars');
-        fprintf('   已保留原始文件的所有变量结构，并更新了数据\n');
+        fprintf('   All variable structures from original file are preserved, and data has been updated\n');
         
     catch ME
-        fprintf('错误: 处理文件 %s 时发生错误: %s\n', data_file, ME.message);
-        fprintf('错误堆栈:\n');
+        fprintf('Error: An error occurred while processing file %s: %s\n', data_file, ME.message);
+        fprintf('Error stack trace:\n');
         for k = 1:length(ME.stack)
             fprintf('  %s (%d)\n', ME.stack(k).name, ME.stack(k).line);
         end
-        continue; % 跳过当前文件，继续处理下一个
+        continue; % Skip current file and proceed to next one
     end
 end
 
-fprintf('\n批量处理完成！已处理 %d/%d 个文件\n', file_idx, length(mat_files));
+fprintf('\nBatch processing completed! Processed %d/%d files\n', file_idx, length(mat_files));
 
-%% 小波阈值去噪函数
+%% Wavelet threshold denoising function
 function EEG_data_cleaned = WT_artifact_removal(EEG_data, EEG_channels, wname, level)
-    % 使用小波阈值进行伪迹去除（使用标准小波阈值去噪方法）
-    fprintf('    正在进行小波阈值去噪...\n');
+    % Perform artifact removal using wavelet thresholding (standard wavelet threshold denoising method)
+    fprintf('    Performing wavelet threshold denoising...\n');
     
-    % 提取指定通道的数据
+    % Extract data of specified channels
     EEG_data_selected = EEG_data(EEG_channels, :);
     EEG_data_cleaned = zeros(size(EEG_data_selected));
     
-    % 对每个通道分别进行小波阈值去噪
+    % Perform wavelet threshold denoising for each channel individually
     for ch = 1:size(EEG_data_selected, 1)
         channel_data = EEG_data_selected(ch, :);
         N = length(channel_data);
         
-        % 使用标准小波阈值去噪方法
-        % 小波分解
+        % Use standard wavelet threshold denoising method
+        % Wavelet decomposition
         [c, l] = wavedec(channel_data, level, wname);
         
-        % 对每个细节系数进行软阈值处理
+        % Apply soft thresholding to each detail coefficient
         for i = 1:level
             start_index = sum(l(1:i)) + 1;
             end_index = sum(l(1:i+1));
             
-            % 使用通用阈值公式
-            thr = 0.5 * sqrt(2 * log(N)); % 阈值0.5*sqrt(2*log(N))
+            % Use universal threshold formula
+            thr = 0.5 * sqrt(2 * log(N)); % Threshold: 0.5*sqrt(2*log(N))
             
-            % 应用软阈值处理
+            % Apply soft thresholding
             c(start_index:end_index) = wthresh(c(start_index:end_index), 's', thr); 
         end
         
-        % 将去噪后的信号进行小波重构
+        % Reconstruct denoised signal using wavelet
         cleaned_channel = waverec(c, l, wname);
         
         EEG_data_cleaned(ch, :) = cleaned_channel;
     end
+
 end
