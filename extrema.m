@@ -1,21 +1,3 @@
-% This is a utility program for significance test.
-%
-%   function [spmax, spmin, flag]= extrema(in_data)
-%
-% INPUT:
-%       in_data: Inputted data, a time series to be sifted;
-% OUTPUT:
-%       spmax: The locations (col 1) of the maxima and its corresponding
-%              values (col 2)
-%       spmin: The locations (col 1) of the minima and its corresponding
-%              values (col 2)
-%
-% References can be found in the "Reference" section.
-%
-% The code is prepared by Zhaohua Wu. For questions, please read the "Q&A" section or
-% contact
-%   zhwu@cola.iges.org
-%
 function [spmax, spmin, flag]= extrema(in_data)
 
 flag=1;
@@ -90,5 +72,6 @@ else
 end
 
 flag=1;
+
 
 
