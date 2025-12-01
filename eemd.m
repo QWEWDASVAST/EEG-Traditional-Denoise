@@ -1,28 +1,3 @@
-% This is an EMD/EEMD program
-%
-%   function allmode=eemd(Y,Nstd,NE)
-%
-% INPUT:
-%       Y: Inputted data;
-%       Nstd: ratio of the standard deviation of the added noise and that of Y;
-%       NE: Ensemble number for the EEMD
-% OUTPUT:
-%       A matrix of N*(m+1) matrix, where N is the length of the input
-%       data Y, and m=fix(log2(N))-1. Column 1 is the original data, columns 2, 3, ...
-%       m are the IMFs from high to low frequency, and comlumn (m+1) is the
-%       residual (over all trend).
-%
-% NOTE:
-%       It should be noted that when Nstd is set to zero and NE is set to 1, the
-%       program degenerates to a EMD program.
-%
-% References can be found in the "Reference" section.
-%
-% The code is prepared by Zhaohua Wu. For questions, please read the "Q&A" section or
-% contact
-%   zhwu@cola.iges.org
-%
-
 function allmode=eemd(Y,Nstd,NE)
 xsize=length(Y);
 dd=1:1:xsize;
@@ -82,6 +57,7 @@ end
 
 allmode=allmode/NE;
 allmode=allmode*Ystd;
+
 
 
 
